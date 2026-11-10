@@ -20,7 +20,7 @@ byte meuEnd = 3;
 // Let these addresses be used for the pair
 uint64_t address[2] = { 0x3030303030LL, 0x3030303030LL };
 
-byte payload[5] = { 12, 3, 0, 2, 1 };
+byte payload[5] = { 26, 3, 0, 2, 1 };
 
 void setup() {
 
