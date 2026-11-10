@@ -5,20 +5,22 @@
 
 #define CE_PIN 7
 #define CSN_PIN 8
-#define TIMEOUT 200 //millis
-
+#define TIMEOUT 400  //millis
 #define DATA 0
 #define ACK 1
+#define MAX_TENTATIVAS 6
 
 // instantiate an object for the nRF24L01 transceiver
 RF24 radio(CE_PIN, CSN_PIN);
 
 byte meuEnd = 3;
+// byte meuEnd = 26; 
+// byte meuEnd = 12;
 
 // Let these addresses be used for the pair
 uint64_t address[2] = { 0x3030303030LL, 0x3030303030LL };
 
-byte payload[5] = {26,3,0,2,1};
+byte payload[5] = { 12, 3, 0, 2, 1 };
 
 void setup() {
 
@@ -47,16 +49,16 @@ void setup() {
   radio.openWritingPipe(address[0]);  // always uses pipe 0
 
   // set the RX address of the TX node into a RX pipe
-  radio.openReadingPipe(0,address[1]);  // using pipe 1
+  radio.openReadingPipe(0, address[1]);  // using pipe 1
 
   // For debugging info
-   printf_begin();             // needed only once for printing details
-   radio.printDetails();       // (smaller) function that prints raw register values
-   radio.printPrettyDetails(); // (larger) function that prints human readable data
+  printf_begin();              // needed only once for printing details
+  radio.printDetails();        // (smaller) function that prints raw register values
+  radio.printPrettyDetails();  // (larger) function that prints human readable data
 
 }  // setup
 
-void printPacote(byte *pac, int tamanho){
+void printPacote(byte* pac, int tamanho) {
   Serial.print(F("Rcvd "));
   Serial.print(tamanho);
   Serial.print(F(" O: "));
@@ -74,36 +76,48 @@ void printPacote(byte *pac, int tamanho){
   Serial.println();
 }
 
-void envia(byte destino, byte* pacote, int tamanho, byte controle) {
+void envia(byte destino, byte* pacote, int tamanho, byte controle, int tentativas) {
   radio.stopListening();
   pacote[0] = destino;
   pacote[1] = meuEnd;
   pacote[2] = controle;
 
-  radio.write(pacote, tamanho);
-  Serial.println(F("Pacote enviado! Aguardando ACK..."));
-
+  radio.flush_rx();
   radio.startListening();
+  delayMicroseconds(200);
+  radio.stopListening();
+  if (!radio.testCarrier()) {
 
-  bool confirmado = false;
-  unsigned long int tempo = millis();
+    radio.write(pacote, tamanho);
+    Serial.println(F("Pacote enviado! Aguardando ACK..."));
 
-  while (!confirmado && (millis() - tempo < TIMEOUT)) {
-    if (radio.available()) {
-      byte bufferRx[5];
-      radio.read(bufferRx, 5);
+    radio.startListening();
 
-      if (bufferRx[0] == meuEnd && bufferRx[1] == destino && bufferRx[2] == ACK) {
-        Serial.println(F("Confirmacao recebida com sucesso!"));
-        confirmado = true;
+    bool confirmado = false;
+    unsigned long int tempo = millis();
+
+    while (!confirmado && (millis() - tempo < TIMEOUT)) {
+      if (radio.available()) {
+        byte bufferRx[5];
+        radio.read(bufferRx, 5);
+
+        if (bufferRx[0] == meuEnd && bufferRx[1] == destino && bufferRx[2] == ACK) {
+          Serial.println(F("Confirmacao recebida com sucesso!"));
+          confirmado = true;
+        }
       }
     }
-  }
 
-  if (!confirmado) {
-    Serial.println(F("Timeout: Nenhuma confirmacao recebida."));
+    if (!confirmado) {
+      Serial.println(F("Timeout: Nenhuma confirmacao recebida."));
+    }
+  } else if (tentativas > 0) {
+    Serial.println(tentativas);
+    envia(destino, pacote, tamanho, controle, tentativas - 1);
+  } else {
+    Serial.println(F("Tentativas esgotadas"));
   }
-}
+} 
 
 void recebe(byte* pacote, byte controle) {
   radio.startListening();
@@ -118,9 +132,8 @@ void recebe(byte* pacote, byte controle) {
       if (pacote[2] == DATA && controle == DATA) {
         printPacote(pacote, tamanho);
 
-        envia(pacote[1], pacote, 5, ACK);
-      }
-      else if (pacote[2] == ACK && controle == ACK) {
+        envia(pacote[1], pacote, 5, ACK, MAX_TENTATIVAS);
+      } else if (pacote[2] == ACK && controle == ACK) {
         Serial.println(F("Confirmacao (ACK) recebida no modo escuta!"));
       }
     }
@@ -139,7 +152,7 @@ void recebe(byte* pacote, byte controle) {
 //    radio.startListening();
 //    delayMicroseconds(50);
 //    radio.stopListening();
-//    if (!radio.testCarrier()) {a
+//    if (!radio.testCarrier()) {
 //      if(tipo==ACK){
 //       radio.write(&payload[0], 3);
 //      }else if(tipo==DATA){
@@ -182,8 +195,8 @@ void recebe(byte* pacote, byte controle) {
 
 void loop() {
 
-  envia(payload[0], payload, 5, DATA);
-  // recebe(payload, DATA);
+  // envia(26, payload, 5, DATA, MAX_TENTATIVAS);
+  recebe(payload, DATA);
   delay(1000);
 
 }  // loop
