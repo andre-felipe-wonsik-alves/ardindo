@@ -5,53 +5,76 @@ const int botao = A0;
 bool estadoAnterior = HIGH; 
 unsigned long tempoPressionado = 0;
 bool comandoExecutado = false;
+unsigned long ultimaMudanca = 0;
+const unsigned long tempoDebounce = 50;
 
 int posicao = 0;
 const unsigned long tempoCliqueLongo = 3000;
+const unsigned long intervaloPiscadas = 250;
+int piscadasRestantes = 0;
+unsigned long ultimaPiscada = 0;
 
 void setup() {
   // Configura A0 como entrada e ativa o resistor pull-up interno
   // Com o INPUT_PULLUP, o pino fica em HIGH (1) por padrão e vai para LOW (0) quando pressionado
   pinMode(botao, INPUT_PULLUP);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
   
   // Inicia a comunicação serial para ver o resultado no Monitor Serial
   Serial.begin(9600);
 }
 
 void mainLoop() {
+  unsigned long agora = millis();
   // Lê o estado atual do botão
   bool estadoAtual = digitalRead(botao);
 
    // Verifica se o botão continua pressionado
-  if (estadoAtual == LOW) {
-    // Se o tempo atual menos o tempo de início for maior que o limite
-    if ((millis() - tempoPressionado >= tempoCliqueLongo) && !comandoExecutado) {
-      Serial.println("Botao segurado detectado!");
-      
-      comandoExecutado = true; // Garante que a ação rode apenas uma vez por clique
+  if (estadoAtual != estadoAnterior) {
+    ultimaMudanca = agora;
   }
 
-  // Detecta a transição: o botão ERA 'HIGH' (solto) e AGORA é 'LOW' (pressionado)
-  else if (estadoAnterior == HIGH && estadoAtual == LOW) {
-    tempoPressionado = millis();
-    comandoExecutado = false;
-
-    Serial.println("Botão clicado!");
-    posicao++;
-
-    if (posicao > 8){
-      posicao = 0;
-    }
-    Serial.println(posicao);
-  }
-
-  // Fazer aqui enviar a info da posição
-    
-    delay(50); // Pequeno atraso (Debounce) para evitar leituras falsas causadas pelo ruído mecânico
-  }
-
-  // Atualiza o estado anterior para a próxima leitura
   estadoAnterior = estadoAtual;
+
+  if (agora - ultimaMudanca >= tempoDebounce && estadoAtual != estadoAnterior) {
+    // Atualiza o estado anterior para a próxima leitura
+    estadoAnterior = estadoAtual;
+
+    // Detecta a transição: o botão ERA 'HIGH' (solto) e AGORA é 'LOW' (pressionado)
+    if (estadoAtual == LOW) {
+      tempoPressionado = agora;
+      comandoExecutado = false;
+
+      Serial.println("Botão clicado!");
+      posicao++;
+
+      if (posicao > 8){
+        posicao = 0;
+      }
+
+      Serial.println(posicao);
+      piscadasRestantes = posicao;
+      digitalWrite(LED_BUILTIN, LOW);
+      ultimaPiscada = agora;
+    }
+  }
+
+  if (estadoAnterior == LOW && !comandoExecutado && agora - tempoPressionado >= tempoCliqueLongo) {
+    Serial.println("Botão segurado detectado!");
+    comandoExecutado = true;
+  }
+
+  // Pisca sem bloquear a leitura do botão
+  if (piscadasRestantes > 0 && agora - ultimaPiscada >= intervaloPiscadas) {
+    ultimaPiscada = agora;
+    bool ledLigado = !digitalRead(LED_BUILTIN);
+    digitalWrite(LED_BUILTIN, ledLigado);
+    
+    if (!ledLigado) {
+      piscadasRestantes--;
+    }
+  }
 }
 
 void loop() {
