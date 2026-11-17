@@ -6,13 +6,15 @@ bool estadoAnterior = HIGH;
 unsigned long tempoPressionado = 0;
 bool comandoExecutado = false;
 unsigned long ultimaMudanca = 0;
-const unsigned long tempoDebounce = 50;
+const unsigned long tempoDebounce = 10;
 
 int posicao = 0;
 const unsigned long tempoCliqueLongo = 3000;
-const unsigned long intervaloPiscadas = 250;
-int piscadasRestantes = 0;
-unsigned long ultimaPiscada = 0;
+const unsigned long intervaloBlinks = 350;
+const unsigned long intervaloLoopBlink = 1300;
+
+int blinksRestantes = 0;
+unsigned long ultimoBlink = 0;
 
 void setup() {
   // Configura A0 como entrada e ativa o resistor pull-up interno
@@ -31,32 +33,27 @@ void mainLoop() {
   bool estadoAtual = digitalRead(botao);
 
    // Verifica se o botão continua pressionado
-  if (estadoAtual != estadoAnterior) {
-    ultimaMudanca = agora;
-  }
-
-  estadoAnterior = estadoAtual;
-
   if (agora - ultimaMudanca >= tempoDebounce && estadoAtual != estadoAnterior) {
     // Atualiza o estado anterior para a próxima leitura
     estadoAnterior = estadoAtual;
+    ultimaMudanca = agora;
 
-    // Detecta a transição: o botão ERA 'HIGH' (solto) e AGORA é 'LOW' (pressionado)
+    // 'LOW' (pressionado)
     if (estadoAtual == LOW) {
-      tempoPressionado = agora;
-      comandoExecutado = false;
-
       Serial.println("Botão clicado!");
       posicao++;
+
+      tempoPressionado = agora;
+      comandoExecutado = false;
 
       if (posicao > 8){
         posicao = 0;
       }
 
       Serial.println(posicao);
-      piscadasRestantes = posicao;
+      blinksRestantes = posicao;
       digitalWrite(LED_BUILTIN, LOW);
-      ultimaPiscada = agora;
+      ultimoBlink = agora;
     }
   }
 
@@ -66,14 +63,18 @@ void mainLoop() {
   }
 
   // Pisca sem bloquear a leitura do botão
-  if (piscadasRestantes > 0 && agora - ultimaPiscada >= intervaloPiscadas) {
-    ultimaPiscada = agora;
+  if (blinksRestantes > 0 && agora - ultimoBlink >= intervaloBlinks) {
+    ultimoBlink = agora;
     bool ledLigado = !digitalRead(LED_BUILTIN);
     digitalWrite(LED_BUILTIN, ledLigado);
     
     if (!ledLigado) {
-      piscadasRestantes--;
+      blinksRestantes--;
     }
+  }
+
+  if (blinksRestantes <= 0 && agora - ultimoBlink >= intervaloLoopBlink){
+    blinksRestantes = posicao;
   }
 }
 
