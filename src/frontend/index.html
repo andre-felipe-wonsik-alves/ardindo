@@ -1,11 +1,86 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jogo da Velha</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jogo da Velha</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <string>ebaa</string>
+  <main class="app-container">
+    <div class="page-heading">
+      <h1>Jogo da Velha</h1>
+    </div>
+
+    <header class="scoreboard">
+      <div class="player-badge player-1 active" id="player-1">
+        <span class="node-tag">Jogador 1</span>
+        <span class="symbol">X</span>
+        <span class="status" id="player-1-status">Sua vez</span>
+      </div>
+
+      <div class="player-badge player-2" id="player-2">
+        <span class="node-tag">Jogador 2</span>
+        <span class="symbol">O</span>
+        <span class="status" id="player-2-status">Aguardando</span>
+      </div>
+    </header>
+
+    <section class="game-panel" aria-label="Partida atual">
+      <div class="board" role="img" aria-label="Tabuleiro">
+        <div class="cell is-x" id="cell-0" data-position="0">X</div>
+        <div class="cell is-o" id="cell-1" data-position="1">O</div>
+        <div class="cell" id="cell-2" data-position="2"></div>
+        <div class="cell" id="cell-3" data-position="3"></div>
+        <div class="cell is-x" id="cell-4" data-position="4">X</div>
+        <div class="cell" id="cell-5" data-position="5"></div>
+        <div class="cell is-o" id="cell-6" data-position="6">O</div>
+        <div class="cell" id="cell-7" data-position="7"></div>
+        <div class="cell" id="cell-8" data-position="8"></div>
+      </div>
+    </section>
+
+    <section class="stats-panel" aria-labelledby="stats-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="stats-title">Placar geral</h2>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <article class="stat-card stat-player-1">
+          <span class="stat-symbol">X</span>
+          <div>
+            <p class="stat-label">Vitórias · Jogador 1</p>
+            <p class="stat-value" id="wins-player-1" aria-live="polite">0</p>
+          </div>
+        </article>
+
+        <article class="stat-card stat-player-2">
+          <span class="stat-symbol">O</span>
+          <div>
+            <p class="stat-label">Vitórias · Jogador 2</p>
+            <p class="stat-value" id="wins-player-2" aria-live="polite">0</p>
+          </div>
+        </article>
+
+        <article class="stat-card stat-draws">
+          <span class="stat-symbol" aria-hidden="true">=</span>
+          <div>
+            <p class="stat-label">Empates</p>
+            <p class="stat-value" id="draws" aria-live="polite">0</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <footer class="game-controls">
+      <button type="button" class="reset-button" id="reset-game">
+        <strong><span aria-hidden="true">↻</span></strong>
+        Reiniciar partida
+      </button>
+    </footer>
+
+  </main>
 </body>
 </html>
