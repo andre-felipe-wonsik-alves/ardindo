@@ -35,5 +35,10 @@ Por fim, execute o monitor usando:
 make run
 ```
 
+## Uso de IA
+Durante o projeto, houve o uso de LLMs para o desenvolvimento de alguns trechos de código. Especificamente:
+1. Expressão regular no arquivo `src/backend/serial/ttt_parser.py`
+2. Método `_sendSerial()` no `src/backend/gateway.ino/gateway.ino.ino`
+
 ## Referências
 Monitor de porta serial - [https://rahulsreedharan.medium.com/serial-port-programming-on-linux-using-python-and-pyserial-54f052f9f714](https://rahulsreedharan.medium.com/serial-port-programming-on-linux-using-python-and-pyserial-54f052f9f714)

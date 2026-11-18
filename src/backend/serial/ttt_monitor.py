@@ -4,7 +4,7 @@ import time
 import serial
 
 
-class Monitor:
+class TTTMonitor:
     def __init__(self, port, baudrate, on_message=None):
         self.port = port
         self.baudrate = baudrate
