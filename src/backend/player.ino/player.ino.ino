@@ -3,27 +3,37 @@
 #include <nRF24L01.h>
 #include <printf.h>
 
-#define CE_PIN 7
+#define CE_PIN  7
 #define CSN_PIN 8
-#define TIMEOUT 400  //millis
-#define DATA 0
-#define ACK 1
-#define MAX_TENTATIVAS 6
+#define TIMEOUT 400  
 
-// instantiate an object for the nRF24L01 transceiver
+#define ADDR_GATEWAY   3
+#define ADDR_PLAYER_1  12
+#define ADDR_PLAYER_2  27
+
+// Tipos de pacote
+#define TYPE_ACK  1
+#define TYPE_ERR  2
+#define TYPE_PLAY 3
+
+// [tipo;origem;destino;jogador;posição;checksum]
+#define ID_TIPO     0
+#define ID_ORIGEM   1
+#define ID_DESTINO  2
+#define ID_JOGADOR  3
+#define ID_POSICAO  4
+#define ID_CHECKSUM 5
+#define PAYLOAD_SIZE 6
+
 RF24 radio(CE_PIN, CSN_PIN);
 
-// Let these addresses be used for the pair
 uint64_t address[2] = { 0x3030303030LL, 0x3030303030LL };
 
-// tipo, player, posição, sequência, checksum
-byte payload[5] = { 26, 3, 0, 2, 1 };
+// !!!!!!!!!!!!!!! TROCAR DE ACORDO COM A PLACA
+const byte MEU_ADDR    = ADDR_PLAYER_1;
+const byte MEU_JOGADOR = 1;
 
-const int destino = 3; //plaquina do gateway
-
-const int tamanho = 6; //tamanho do pacote de envio
-
-byte* pacote[6];
+byte pacote[PAYLOAD_SIZE];
 
 // Define o pino A0 com o nome 'botao'
 const int botao = A0;
@@ -59,7 +69,7 @@ void setup() {
   radio.setChannel(100);
   // save on transmission time by setting the radio to only transmit the
   // number of bytes we need to transmit a float
-  radio.setPayloadSize(5);  // float datatype occupies 4 bytes
+  radio.setPayloadSize(PAYLOAD_SIZE);
   radio.setAutoAck(false);
   radio.setCRCLength(RF24_CRC_DISABLED);
   radio.setDataRate(RF24_250KBPS);
@@ -75,35 +85,34 @@ void setup() {
   radio.printPrettyDetails();  // (larger) function that prints human readable data
 }
 
-void envia(byte tipo, byte jogador, byte posicao, byte sequencia, byte checksum, int tamanho) {
-  radio.stopListening();
-  pacote[0] = destino;
-  pacote[1] = tipo;
-  pacote[2] = jogador; 
-  pacote[3] = posicao;
-  pacote[4] = sequencia;
-  pacote[5] = checksum;
+void envia(byte posicao) {
+  pacote[ID_TIPO]     = TYPE_PLAY;
+  pacote[ID_ORIGEM]   = MEU_ADDR;
+  pacote[ID_DESTINO]  = ADDR_GATEWAY;
+  pacote[ID_JOGADOR]  = MEU_JOGADOR;
+  pacote[ID_POSICAO]  = posicao;
+  pacote[ID_CHECKSUM] = 0; // reservado
 
   radio.flush_rx();
   radio.startListening();
   delayMicroseconds(200);
   radio.stopListening();
-  if (!radio.testCarrier()) {
 
-    radio.write(pacote, tamanho);
+  if (!radio.testCarrier()) {
+    radio.write(pacote, PAYLOAD_SIZE);
     Serial.println(F("Pacote enviado! Aguardando ACK..."));
 
     radio.startListening();
 
     bool confirmado = false;
-    unsigned long int tempo = millis();
+    unsigned long tempo = millis();
 
     while (!confirmado && (millis() - tempo < TIMEOUT)) {
       if (radio.available()) {
-        byte bufferRx[5];
-        radio.read(bufferRx, 5);
+        byte bufferRx[PAYLOAD_SIZE];
+        radio.read(bufferRx, PAYLOAD_SIZE);
 
-        if (bufferRx[0] == jogador && bufferRx[1] == destino && bufferRx[2] == ACK) {
+        if (bufferRx[ID_DESTINO] == MEU_ADDR && bufferRx[ID_TIPO] == TYPE_ACK) {
           Serial.println(F("Confirmacao recebida com sucesso!"));
           confirmado = true;
         }
@@ -113,11 +122,6 @@ void envia(byte tipo, byte jogador, byte posicao, byte sequencia, byte checksum,
     if (!confirmado) {
       Serial.println(F("Timeout: Nenhuma confirmacao recebida."));
     }
-  // } else if (tentativas > 0) {
-  //   Serial.println(tentativas);
-  //   envia(destino, pacote, tamanho, controle, tentativas - 1);
-  // } else {
-  //   Serial.println(F("Tentativas esgotadas"));
   }
 } 
 
@@ -132,7 +136,7 @@ void clique() {
       Serial.println("Botao segurado detectado!");
       
       comandoExecutado = true; // Garante que a ação rode apenas uma vez por clique
-      envia(ACK, 26, 2, 0, 67, tamanho);
+      envia(posicao);
   }
 
   // Detecta a transição: o botão ERA 'HIGH' (solto) e AGORA é 'LOW' (pressionado)
