@@ -4,7 +4,7 @@ from backend.serial.ttt_monitor import TTTMonitor
 from backend.serial.ttt_parser import parse_message
 from backend.serial.ttt_requester import TTTRequester
 
-API_ENDPOINT = "http://localhost:3000"
+API_ENDPOINT = "http://localhost:5000"
 
 requester = TTTRequester(endpoint=API_ENDPOINT)
 
