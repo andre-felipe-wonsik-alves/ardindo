@@ -7,7 +7,7 @@
 #define CSN_PIN 8
 #define TIMEOUT 400  
 
-#define ADDR_GATEWAY   3
+#define ADDR_GATEWAY   3 //plaquina do gateway
 #define ADDR_PLAYER_1  12
 #define ADDR_PLAYER_2  27
 
@@ -42,25 +42,34 @@ const int botao = A0;
 bool estadoAnterior = HIGH; 
 unsigned long tempoPressionado = 0;
 bool comandoExecutado = false;
+unsigned long ultimaMudanca = 0;
+const unsigned long tempoDebounce = 10;
 
 int posicao = 0;
 const unsigned long tempoCliqueLongo = 3000;
+const unsigned long intervaloBlinks = 350;
+const unsigned long intervaloLoopBlink = 1300;
+
+int blinksRestantes = 0;
+unsigned long ultimoBlink = 0;
 
 void setup() {
   // Configura A0 como entrada e ativa o resistor pull-up interno
   // Com o INPUT_PULLUP, o pino fica em HIGH (1) por padrão e vai para LOW (0) quando pressionado
   pinMode(botao, INPUT_PULLUP);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
   
   // Inicia a comunicação serial para ver o resultado no Monitor Serial
   Serial.begin(115200);
   while (!Serial) {
-    // some boards need to wait to ensure access to serial over USB
+    //some boards need to wait to ensure access to serial over USB
   }
 
   // initialize the transceiver on the SPI bus
   if (!radio.begin()) {
-    Serial.println(F("radio hardware is not responding!!"));
-    while (1) {}  // hold in infinite loop
+   Serial.println(F("radio hardware is not responding!!"));
+   while (1) {}  // hold in infinite loop
   }
 
   // because these examples are likely run with nodes in close proximity to
@@ -125,39 +134,57 @@ void envia(byte posicao) {
   }
 } 
 
+//O LED NÃO FUNCIONA AINDA PELO CONFLITO DO PINO d13 COM O RÁDIO.
 void clique() {
+   unsigned long agora = millis();
   // Lê o estado atual do botão
   bool estadoAtual = digitalRead(botao);
 
    // Verifica se o botão continua pressionado
-  if (estadoAtual == LOW) {
-    // Se o tempo atual menos o tempo de início for maior que o limite
-    if ((millis() - tempoPressionado >= tempoCliqueLongo) && !comandoExecutado) {
-      Serial.println("Botao segurado detectado!");
-      
-      comandoExecutado = true; // Garante que a ação rode apenas uma vez por clique
-      envia(posicao);
-  }
+  if (agora - ultimaMudanca >= tempoDebounce && estadoAtual != estadoAnterior) {
+    // Atualiza o estado anterior para a próxima leitura
+    estadoAnterior = estadoAtual;
+    ultimaMudanca = agora;
 
-  // Detecta a transição: o botão ERA 'HIGH' (solto) e AGORA é 'LOW' (pressionado)
-  else if (estadoAnterior == HIGH && estadoAtual == LOW) {
-    tempoPressionado = millis();
-    comandoExecutado = false;
+    // 'LOW' (pressionado)
+    if (estadoAtual == LOW) {
+      Serial.println("Botão clicado!");
+      posicao++;
 
-    Serial.println("Botão clicado!");
-    posicao++;
+      tempoPressionado = agora;
+      comandoExecutado = false;
 
-    if (posicao > 8){
-      posicao = 0;
+      if (posicao > 8){
+        posicao = 0;
+      }
+
+      Serial.println(posicao);
+      blinksRestantes = posicao;
+      digitalWrite(LED_BUILTIN, LOW);
+      ultimoBlink = agora;
     }
-    Serial.println(posicao);
   }
 
-    delay(50); // Pequeno atraso (Debounce) para evitar leituras falsas causadas pelo ruído mecânico
+  if (estadoAnterior == LOW && !comandoExecutado && agora - tempoPressionado >= tempoCliqueLongo) {
+    Serial.println("Botão segurado detectado!");
+    comandoExecutado = true;
+    envia(posicao);
   }
 
-  // Atualiza o estado anterior para a próxima leitura
-  estadoAnterior = estadoAtual;
+  // Pisca sem bloquear a leitura do botão
+  if (blinksRestantes > 0 && agora - ultimoBlink >= intervaloBlinks) {
+    ultimoBlink = agora;
+    bool ledLigado = !digitalRead(LED_BUILTIN);
+    digitalWrite(LED_BUILTIN, ledLigado);
+    
+    if (!ledLigado) {
+      blinksRestantes--;
+    }
+  }
+
+  if (blinksRestantes <= 0 && agora - ultimoBlink >= intervaloLoopBlink){
+    blinksRestantes = posicao;
+  }
 }
 
 void loop() {
