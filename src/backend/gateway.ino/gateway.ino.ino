@@ -30,6 +30,7 @@ uint64_t address[2] = { 0x3030303030LL, 0x3030303030LL };
 
 bool isPlayerOne = true;
 char board[3][3];
+bool gameOver = false;
 
 byte winConditions[8][3] = {
   {0, 1, 2}, {3, 4, 5}, {6, 7, 8},
@@ -48,6 +49,28 @@ bool _isMoveValid(byte pos) {
   byte row = pos / 3;
   byte col = pos % 3;
   return board[row][col] == '-';
+}
+
+bool _checkWinner(char symbol) {
+  for (int i = 0; i < 8; i++) {
+    bool won = true;
+    for (int j = 0; j < 3; j++) {
+      byte pos = winConditions[i][j];
+      if (board[pos / 3][pos % 3] != symbol) {
+        won = false;
+        break;
+      }
+    }
+    if (won) return true;
+  }
+  return false;
+}
+
+bool _isDraw() {
+  for (int r = 0; r < 3; r++)
+    for (int c = 0; c < 3; c++)
+      if (board[r][c] == '-') return false;
+  return true;
 }
 
 void _applyMove(byte pos) {
@@ -75,6 +98,14 @@ void _sendSerial() {
   }
   Serial.print(F("], isPlayerOne: "));
   Serial.print(isPlayerOne ? F("true") : F("false"));
+  Serial.print(F(", winner: "));
+
+  if (_checkWinner('X')) Serial.print(F("\"X\""));
+  else if (_checkWinner('O')) Serial.print(F("\"O\""));
+  else Serial.print(F("null"));
+
+  Serial.print(F(", draw: "));
+  Serial.print(_isDraw() && !_checkWinner('X') && !_checkWinner('O') ? F("true") : F("false"));
   Serial.println(F("}"));
 }
 
@@ -93,6 +124,12 @@ void _handleIncomingPlay(byte* payload) {
   byte jogador = payload[ID_JOGADOR];
   byte pos     = payload[ID_POSICAO];
 
+  if (gameOver) {
+    Serial.println(F("[ERR] Partida encerrada"));
+    _sendErr(origem);
+    return;
+  }
+
   bool senderIsPlayerOne = (jogador == 1);
 
   if (senderIsPlayerOne != isPlayerOne) {
@@ -109,8 +146,29 @@ void _handleIncomingPlay(byte* payload) {
 
   _applyMove(pos);
   _sendAck(origem);
+  char symbol = isPlayerOne ? 'X' : 'O';
+  if (_checkWinner(symbol)) {
+    gameOver = true;
+  } else if (_isDraw()) {
+    gameOver = true;
+  } else {
+    _switchTurn();
+  }
   _sendSerial();
-  _switchTurn();
+}
+
+void _handleSerialReset() {
+  if (!Serial.available()) return;
+
+  String command = Serial.readStringUntil('\n');
+  command.trim();
+  if (command == "RESET") {
+    _resetBoard();
+    isPlayerOne = true;
+    gameOver = false;
+    Serial.println(F("[RESET] Partida reiniciada"));
+    _sendSerial();
+  }
 }
 
 void setup() {
@@ -140,6 +198,8 @@ void setup() {
 }
 
 void loop() {
+  _handleSerialReset();
+
   if (!radio.available()) return;
 
   byte buf[PAYLOAD_SIZE];

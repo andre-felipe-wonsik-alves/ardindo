@@ -14,7 +14,7 @@
       throw new Error(`Falha ao buscar estado: ${response.status}`);
     }
 
-    const { board, player } = await response.json();
+    const { board, player, winner, draw, score } = await response.json();
 
     board.flat().forEach((value, index) => {
       const cell = document.getElementById(`cell-${index}`);
@@ -28,10 +28,41 @@
 
     document.querySelector("#player-1").classList.toggle("active", player);
     document.querySelector("#player-2").classList.toggle("active", !player);
+
+    document.querySelector("#wins-player-1").textContent = score.player1;
+    document.querySelector("#wins-player-2").textContent = score.player2;
+    document.querySelector("#draws").textContent = score.draw;
+
+    if (winner) {
+      document.querySelector("#player-1-status").textContent =
+        winner === "X" ? "Vitória" : "Aguardando";
+      document.querySelector("#player-2-status").textContent =
+        winner === "O" ? "Vitória" : "Aguardando";
+    } else if (draw) {
+      document.querySelector("#player-1-status").textContent = "Empate";
+      document.querySelector("#player-2-status").textContent = "Empate";
+    } else {
+      document.querySelector("#player-1-status").textContent =
+        player ? "Sua vez" : "Aguardando";
+      document.querySelector("#player-2-status").textContent =
+        player ? "Aguardando" : "Sua vez";
+    }
+  }
+
+  async function reiniciarPartida() {
+    const response = await fetch("/reset", { method: "POST" });
+    if (!response.ok) {
+      throw new Error(`Falha ao reiniciar: ${response.status}`);
+    }
+    await atualizarPagina();
   }
 
   atualizarPagina().catch(console.error);
   setInterval(() => atualizarPagina().catch(console.error), 500);
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelector("#reset-game")
+      .addEventListener("click", () => reiniciarPartida().catch(console.error));
+  });
 </script>
 
 <body>
