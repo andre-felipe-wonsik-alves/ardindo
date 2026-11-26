@@ -1,10 +1,13 @@
 SERIAL_DIR := src/backend/serial
 PORT       := /dev/ttyUSB0
 
-.PHONY: run install free-port
+.PHONY: run run-api install free-port
 
 run: free-port
 	cd $(SERIAL_DIR) && .venv/bin/python main.py
+
+run-api:
+	src/backend/serial/.venv/bin/python src/backend/api/api.py
 
 install:
 	python3 -m venv $(SERIAL_DIR)/.venv

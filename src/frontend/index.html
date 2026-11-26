@@ -6,6 +6,65 @@
   <title>Jogo da Velha</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
+<script>
+  async function atualizarPagina() {
+    const response = await fetch("/state");
+    if (!response.ok) {
+      throw new Error(`Falha ao buscar estado: ${response.status}`);
+    }
+
+    const { board, player, winner, draw, score } = await response.json();
+
+    board.flat().forEach((value, index) => {
+      const cell = document.getElementById(`cell-${index}`);
+      if (!cell) return;
+
+      const symbol = value === "X" || value === "O" ? value : "";
+      cell.textContent = symbol;
+      cell.classList.toggle("is-x", symbol === "X");
+      cell.classList.toggle("is-o", symbol === "O");
+    });
+
+    document.querySelector("#player-1").classList.toggle("active", player);
+    document.querySelector("#player-2").classList.toggle("active", !player);
+
+    document.querySelector("#wins-player-1").textContent = score.player1;
+    document.querySelector("#wins-player-2").textContent = score.player2;
+    document.querySelector("#draws").textContent = score.draw;
+
+    if (winner) {
+      document.querySelector("#player-1-status").textContent =
+        winner === "X" ? "Vitória" : "Aguardando";
+      document.querySelector("#player-2-status").textContent =
+        winner === "O" ? "Vitória" : "Aguardando";
+    } else if (draw) {
+      document.querySelector("#player-1-status").textContent = "Empate";
+      document.querySelector("#player-2-status").textContent = "Empate";
+    } else {
+      document.querySelector("#player-1-status").textContent =
+        player ? "Sua vez" : "Aguardando";
+      document.querySelector("#player-2-status").textContent =
+        player ? "Aguardando" : "Sua vez";
+    }
+  }
+
+  async function reiniciarPartida() {
+    const response = await fetch("/reset", { method: "POST" });
+    if (!response.ok) {
+      throw new Error(`Falha ao reiniciar: ${response.status}`);
+    }
+    await atualizarPagina();
+  }
+
+  atualizarPagina().catch(console.error);
+  setInterval(() => atualizarPagina().catch(console.error), 500);
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelector("#reset-game")
+      .addEventListener("click", () => reiniciarPartida().catch(console.error));
+  });
+</script>
+
 <body>
   <main class="app-container">
     <div class="page-heading">
@@ -28,13 +87,13 @@
 
     <section class="game-panel" aria-label="Partida atual">
       <div class="board" role="img" aria-label="Tabuleiro">
-        <div class="cell is-x" id="cell-0" data-position="0">X</div>
-        <div class="cell is-o" id="cell-1" data-position="1">O</div>
+        <div class="cell" id="cell-0" data-position="0"></div>
+        <div class="cell" id="cell-1" data-position="1"></div>
         <div class="cell" id="cell-2" data-position="2"></div>
         <div class="cell" id="cell-3" data-position="3"></div>
-        <div class="cell is-x" id="cell-4" data-position="4">X</div>
+        <div class="cell" id="cell-4" data-position="4"></div>
         <div class="cell" id="cell-5" data-position="5"></div>
-        <div class="cell is-o" id="cell-6" data-position="6">O</div>
+        <div class="cell" id="cell-6" data-position="6"></div>
         <div class="cell" id="cell-7" data-position="7"></div>
         <div class="cell" id="cell-8" data-position="8"></div>
       </div>
