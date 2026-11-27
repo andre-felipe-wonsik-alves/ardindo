@@ -56,8 +56,10 @@ void setup() {
   // Configura A0 como entrada e ativa o resistor pull-up interno
   // Com o INPUT_PULLUP, o pino fica em HIGH (1) por padrão e vai para LOW (0) quando pressionado
   pinMode(botao, INPUT_PULLUP);
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
+  
+  // AJUSTAR QUANDO O CONFLITO DO LED FOR RESOLVIDO.
+  // pinMode(LED_BUILTIN, OUTPUT);
+  // digitalWrite(LED_BUILTIN, LOW);
   
   // Inicia a comunicação serial para ver o resultado no Monitor Serial
   Serial.begin(115200);
@@ -100,64 +102,45 @@ void envia(byte posicao) {
   pacote[ID_POSICAO]  = posicao;
   pacote[ID_CHECKSUM] = 0; // reservado
 
-  radio.flush_rx();
-  radio.startListening();
-  delayMicroseconds(200);
-  radio.stopListening();
+  while (true) {
+    radio.flush_rx();
+    radio.startListening();
+    delayMicroseconds(200);
+    radio.stopListening();
 
-  if (!radio.testCarrier()) {
-    radio.write(pacote, PAYLOAD_SIZE);
-    Serial.println(F("Pacote enviado! Aguardando ACK..."));
+    if (!radio.testCarrier()) {
+      radio.write(pacote, PAYLOAD_SIZE);
+      Serial.println(F("Pacote enviado! Aguardando ACK..."));
+    }
 
     radio.startListening();
 
-    bool confirmado = false;
     unsigned long tempo = millis();
+    while (millis() - tempo < TIMEOUT_ENVIA) {
+      if (!radio.available()) continue;
 
-    while (!confirmado && (millis() - tempo < TIMEOUT_ENVIA)) {
-      if (radio.available()) {
-        byte bufferRx[PAYLOAD_SIZE];
-        radio.read(bufferRx, PAYLOAD_SIZE);
+      byte bufferRx[PAYLOAD_SIZE];
+      radio.read(bufferRx, PAYLOAD_SIZE);
+      
+      if (bufferRx[ID_DESTINO] != MEU_ADDR ||
+          bufferRx[ID_ORIGEM] != ADDR_GATEWAY ||
+          bufferRx[ID_POSICAO] != posicao) continue;
 
-        if (bufferRx[ID_DESTINO] == MEU_ADDR && bufferRx[ID_TIPO] == TYPE_ACK) {
-          Serial.println(F("Confirmacao recebida com sucesso!"));
-          confirmado = true;
-        }
+      if (bufferRx[ID_TIPO] == TYPE_ACK) {
+        Serial.println(F("Jogada confirmada!"));
+        return;
+      }
+
+      if (bufferRx[ID_TIPO] == TYPE_ERR) {
+        Serial.println(F("Jogada rejeitada, tente novamente!"));
+        return;
       }
     }
 
-    if (!confirmado) {
-      Serial.println(F("Timeout: Nenhuma confirmacao recebida."));
-    }
+    Serial.println(F("Reenviando a mesma jogada.."));
+    delay(100);
   }
 }
-
-void recebe(byte posicao) {
-  unsigned long inicio = millis();
-
-  radio.flush_rx();
-  radio.startListening();
-
-  if (radio.available()) {
-    while(millis() - inicio < TIMEOUT_RECEBE){
-      int tamanho = radio.getPayloadSize();
-      byte pacote_recebido[tamanho]; 
-      radio.read(pacote_recebido, tamanho);
-
-      if (pacote_recebido[ID_ORIGEM] == MEU_ADDR) {
-        Serial.println(F("Pacote para mim!"));
-
-        if (pacote_recebido[ID_TIPO] == TYPE_ACK) {
-          Serial.println(F("Jogada confirmada!"));
-        } else if (pacote_recebido[ID_TIPO] == TYPE_ERR){
-          Serial.println(F("Erro ao enviar jogada, reenviando.."));
-          envia(posicao);
-        }
-      }
-    }
-  }
-}
-
 
 //O LED NÃO FUNCIONA AINDA PELO CONFLITO DO PINO d13 COM O RÁDIO.
 void clique() {
@@ -184,17 +167,19 @@ void clique() {
       }
 
       Serial.println(posicao);
-      blinksRestantes = posicao;
-      digitalWrite(LED_BUILTIN, LOW);
-      ultimoBlink = agora;
+      // blinksRestantes = posicao;
+      // digitalWrite(LED_BUILTIN, LOW);
+      // ultimoBlink = agora;
     }
   }
 
   if (estadoAnterior == LOW && !comandoExecutado && agora - tempoPressionado >= LONG_CLICK_DURATION) {
     Serial.println("Botão segurado detectado!");
     comandoExecutado = true;
+    envia((byte)posicao);
   }
 
+  /* DESCOMENTAR QUANDO O CONFLITO DO LED FOR RESOLVIDO.
   // Pisca sem bloquear a leitura do botão
   if (blinksRestantes > 0 && agora - ultimoBlink >= BLINK_INTERVAL) {
     ultimoBlink = agora;
@@ -209,6 +194,7 @@ void clique() {
   if (blinksRestantes <= 0 && agora - ultimoBlink >= BLINK_LOOP_INTERVAL){
     blinksRestantes = posicao;
   }
+  */
 }
 
 void loop() {
