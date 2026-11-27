@@ -5,33 +5,37 @@
 
 #define CE_PIN  7
 #define CSN_PIN 8
-#define TIMEOUT 400  
+
+#define TIMEOUT_ENVIA        400  
+#define TIMEOUT_RECEBE       400
+#define BUTTON_DEBOUNCE       10
+#define LONG_CLICK_DURATION 3000
+#define BLINK_INTERVAL       350
+#define BLINK_LOOP_INTERVAL 1300
 
 #define ADDR_GATEWAY   3 //plaquina do gateway
-#define ADDR_PLAYER_1  12
-#define ADDR_PLAYER_2  27
+#define ADDR_PLAYER_1 12
+#define ADDR_PLAYER_2 27
 
 // Tipos de pacote
 #define TYPE_ACK  1
 #define TYPE_ERR  2
 #define TYPE_PLAY 3
 
-// [tipo;origem;destino;jogador;posição;checksum]
-#define ID_TIPO     0
-#define ID_ORIGEM   1
-#define ID_DESTINO  2
-#define ID_JOGADOR  3
-#define ID_POSICAO  4
-#define ID_CHECKSUM 5
-#define PAYLOAD_SIZE 6
+// [tipo;origem;destino;posição;checksum]
+#define ID_TIPO      0
+#define ID_ORIGEM    1
+#define ID_DESTINO   2
+#define ID_POSICAO   3
+#define ID_CHECKSUM  4
+#define PAYLOAD_SIZE 5
 
 RF24 radio(CE_PIN, CSN_PIN);
 
 uint64_t address[2] = { 0x3030303030LL, 0x3030303030LL };
 
 // !!!!!!!!!!!!!!! TROCAR DE ACORDO COM A PLACA
-const byte MEU_ADDR    = ADDR_PLAYER_1;
-const byte MEU_JOGADOR = 1;
+const byte MEU_ADDR = ADDR_PLAYER_1;
 
 byte pacote[PAYLOAD_SIZE];
 
@@ -43,13 +47,8 @@ bool estadoAnterior = HIGH;
 unsigned long tempoPressionado = 0;
 bool comandoExecutado = false;
 unsigned long ultimaMudanca = 0;
-const unsigned long tempoDebounce = 10;
 
 int posicao = 0;
-const unsigned long tempoCliqueLongo = 3000;
-const unsigned long intervaloBlinks = 350;
-const unsigned long intervaloLoopBlink = 1300;
-
 int blinksRestantes = 0;
 unsigned long ultimoBlink = 0;
 
@@ -57,8 +56,10 @@ void setup() {
   // Configura A0 como entrada e ativa o resistor pull-up interno
   // Com o INPUT_PULLUP, o pino fica em HIGH (1) por padrão e vai para LOW (0) quando pressionado
   pinMode(botao, INPUT_PULLUP);
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
+  
+  // AJUSTAR QUANDO O CONFLITO DO LED FOR RESOLVIDO.
+  // pinMode(LED_BUILTIN, OUTPUT);
+  // digitalWrite(LED_BUILTIN, LOW);
   
   // Inicia a comunicação serial para ver o resultado no Monitor Serial
   Serial.begin(115200);
@@ -98,41 +99,48 @@ void envia(byte posicao) {
   pacote[ID_TIPO]     = TYPE_PLAY;
   pacote[ID_ORIGEM]   = MEU_ADDR;
   pacote[ID_DESTINO]  = ADDR_GATEWAY;
-  pacote[ID_JOGADOR]  = MEU_JOGADOR;
   pacote[ID_POSICAO]  = posicao;
   pacote[ID_CHECKSUM] = 0; // reservado
 
-  radio.flush_rx();
-  radio.startListening();
-  delayMicroseconds(200);
-  radio.stopListening();
+  while (true) {
+    radio.stopListening();
+    radio.startListening();
+    delayMicroseconds(200);
+    radio.stopListening();
 
-  if (!radio.testCarrier()) {
-    radio.write(pacote, PAYLOAD_SIZE);
-    Serial.println(F("Pacote enviado! Aguardando ACK..."));
+    if (!radio.available() && !radio.testCarrier()) {
+      radio.write(pacote, PAYLOAD_SIZE);
+      Serial.println(F("Pacote enviado! Aguardando ACK..."));
+    }
 
     radio.startListening();
 
-    bool confirmado = false;
     unsigned long tempo = millis();
+    while (millis() - tempo < TIMEOUT_ENVIA) {
+      if (!radio.available()) continue;
 
-    while (!confirmado && (millis() - tempo < TIMEOUT)) {
-      if (radio.available()) {
-        byte bufferRx[PAYLOAD_SIZE];
-        radio.read(bufferRx, PAYLOAD_SIZE);
+      byte bufferRx[PAYLOAD_SIZE];
+      radio.read(bufferRx, PAYLOAD_SIZE);
+      
+      if (bufferRx[ID_DESTINO] != MEU_ADDR ||
+          bufferRx[ID_ORIGEM] != ADDR_GATEWAY ||
+          bufferRx[ID_POSICAO] != posicao) continue;
 
-        if (bufferRx[ID_DESTINO] == MEU_ADDR && bufferRx[ID_TIPO] == TYPE_ACK) {
-          Serial.println(F("Confirmacao recebida com sucesso!"));
-          confirmado = true;
-        }
+      if (bufferRx[ID_TIPO] == TYPE_ACK) {
+        Serial.println(F("Jogada confirmada!"));
+        return;
+      }
+
+      if (bufferRx[ID_TIPO] == TYPE_ERR) {
+        Serial.println(F("Jogada rejeitada, tente novamente!"));
+        return;
       }
     }
 
-    if (!confirmado) {
-      Serial.println(F("Timeout: Nenhuma confirmacao recebida."));
-    }
+    Serial.println(F("Reenviando a mesma jogada.."));
+    delay(100 + MEU_ADDR); // evita colisão.
   }
-} 
+}
 
 //O LED NÃO FUNCIONA AINDA PELO CONFLITO DO PINO d13 COM O RÁDIO.
 void clique() {
@@ -141,7 +149,7 @@ void clique() {
   bool estadoAtual = digitalRead(botao);
 
    // Verifica se o botão continua pressionado
-  if (agora - ultimaMudanca >= tempoDebounce && estadoAtual != estadoAnterior) {
+  if (agora - ultimaMudanca >= BUTTON_DEBOUNCE && estadoAtual != estadoAnterior) {
     // Atualiza o estado anterior para a próxima leitura
     estadoAnterior = estadoAtual;
     ultimaMudanca = agora;
@@ -159,20 +167,21 @@ void clique() {
       }
 
       Serial.println(posicao);
-      blinksRestantes = posicao;
-      digitalWrite(LED_BUILTIN, LOW);
-      ultimoBlink = agora;
+      // blinksRestantes = posicao;
+      // digitalWrite(LED_BUILTIN, LOW);
+      // ultimoBlink = agora;
     }
   }
 
-  if (estadoAnterior == LOW && !comandoExecutado && agora - tempoPressionado >= tempoCliqueLongo) {
+  if (estadoAnterior == LOW && !comandoExecutado && agora - tempoPressionado >= LONG_CLICK_DURATION) {
     Serial.println("Botão segurado detectado!");
     comandoExecutado = true;
-    envia(posicao);
+    envia((byte)posicao);
   }
 
+  /* DESCOMENTAR QUANDO O CONFLITO DO LED FOR RESOLVIDO.
   // Pisca sem bloquear a leitura do botão
-  if (blinksRestantes > 0 && agora - ultimoBlink >= intervaloBlinks) {
+  if (blinksRestantes > 0 && agora - ultimoBlink >= BLINK_INTERVAL) {
     ultimoBlink = agora;
     bool ledLigado = !digitalRead(LED_BUILTIN);
     digitalWrite(LED_BUILTIN, ledLigado);
@@ -182,9 +191,10 @@ void clique() {
     }
   }
 
-  if (blinksRestantes <= 0 && agora - ultimoBlink >= intervaloLoopBlink){
+  if (blinksRestantes <= 0 && agora - ultimoBlink >= BLINK_LOOP_INTERVAL){
     blinksRestantes = posicao;
   }
+  */
 }
 
 void loop() {

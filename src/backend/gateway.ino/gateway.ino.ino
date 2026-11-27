@@ -15,14 +15,13 @@
 #define TYPE_ERR   2
 #define TYPE_PLAY  3
 
-// [tipo;origem;destino;jogador;posição;checksum]
-#define ID_TIPO     0
-#define ID_ORIGEM   1
-#define ID_DESTINO  2
-#define ID_JOGADOR  3
-#define ID_POSICAO  4
-#define ID_CHECKSUM 5
-#define PAYLOAD_SIZE 6
+// [tipo;origem;destino;posição;checksum]
+#define ID_TIPO      0
+#define ID_ORIGEM    1
+#define ID_DESTINO   2
+#define ID_POSICAO   3
+#define ID_CHECKSUM  4
+#define PAYLOAD_SIZE 5
 
 RF24 radio(CE_PIN, CSN_PIN);
 
@@ -78,39 +77,47 @@ void _sendSerial() {
   Serial.println(F("}"));
 }
 
-void _sendResponse(byte tipo, byte destino) {
-  byte payload[PAYLOAD_SIZE] = { tipo, ADDR_GATEWAY, destino, 0, 0, 0 };
+void _sendResponse(byte tipo, byte destino, byte pos) {
+  byte payload[PAYLOAD_SIZE] = {tipo, ADDR_GATEWAY, destino, pos, 0};
   radio.stopListening();
   radio.write(payload, PAYLOAD_SIZE);
   radio.startListening();
 }
 
-void _sendAck(byte destino) { _sendResponse(TYPE_ACK, destino); }
-void _sendErr(byte destino) { _sendResponse(TYPE_ERR, destino); }
+void _sendAck(byte destino, byte pos) { _sendResponse(TYPE_ACK, destino, pos); }
+void _sendErr(byte destino, byte pos) { _sendResponse(TYPE_ERR, destino, pos); }
 
 void _handleIncomingPlay(byte* payload) {
   byte origem  = payload[ID_ORIGEM];
-  byte jogador = payload[ID_JOGADOR];
   byte pos     = payload[ID_POSICAO];
 
-  bool senderIsPlayerOne = (jogador == 1);
+  bool senderIsPlayerOne = (origem == ADDR_PLAYER_1);
+
+  if (payload[ID_DESTINO] != ADDR_GATEWAY) return;
+  if (origem != ADDR_PLAYER_1 && origem != ADDR_PLAYER_2) return;
+
+  // jogada repetida (pode ser ACK não recebido).
+  if (pos <= 8 && board[pos / 3][pos % 3] == (senderIsPlayerOne ? 'X' : 'O')) {
+    _sendAck(origem, pos);
+    return;
+  }
 
   if (senderIsPlayerOne != isPlayerOne) {
     Serial.println(F("[ERR] Fora de turno"));
-    _sendErr(origem);
+    _sendErr(origem, pos);
     return;
   }
 
   if (!_isMoveValid(pos)) {
     Serial.println(F("[ERR] Posicao invalida ou ocupada"));
-    _sendErr(origem);
+    _sendErr(origem, pos);
     return;
   }
 
   _applyMove(pos);
-  _sendAck(origem);
-  _sendSerial();
   _switchTurn();
+  _sendAck(origem, pos);
+  _sendSerial();
 }
 
 void setup() {
