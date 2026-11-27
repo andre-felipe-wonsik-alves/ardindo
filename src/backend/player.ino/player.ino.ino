@@ -103,12 +103,12 @@ void envia(byte posicao) {
   pacote[ID_CHECKSUM] = 0; // reservado
 
   while (true) {
-    radio.flush_rx();
+    radio.stopListening();
     radio.startListening();
     delayMicroseconds(200);
     radio.stopListening();
 
-    if (!radio.testCarrier()) {
+    if (!radio.available() && !radio.testCarrier()) {
       radio.write(pacote, PAYLOAD_SIZE);
       Serial.println(F("Pacote enviado! Aguardando ACK..."));
     }
@@ -138,7 +138,7 @@ void envia(byte posicao) {
     }
 
     Serial.println(F("Reenviando a mesma jogada.."));
-    delay(100);
+    delay(100 + MEU_ADDR); // evita colisão.
   }
 }
 
